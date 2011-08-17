@@ -1,2 +1,56 @@
 #!/usr/bin/env ruby
+require 'getoptlong'
+require 'pp'
 
+def parse_cmd_line
+  opts = GetoptLong.new(
+    [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
+    [ '--file', '-f', GetoptLong::REQUIRED_ARGUMENT ],
+    [ '--offset', '-o', GetoptLong::REQUIRED_ARGUMENT ],
+    [ '--test', '-t', GetoptLong::NO_ARGUMENT ],
+  )
+
+  opt = {}
+  opts.each {|k, v| opt[k.gsub(/^-*/, '').to_sym] = v } rescue exit 1
+  unless opt[:file]
+    $stderr.puts "No logfile to read. Use -f [LOGFILE]."
+    exit 1
+  end
+  opt[:offset] ||= "#{opt[:file]}.offset"
+
+  if opt[:help]
+    puts <<-EOF
+  logtail2 [OPTION]...
+  Tails a log file keeping track of what lines have been processed.
+
+    -f, --file=FILE    read lines from FILE, may contain * or ? wildcards.
+    -o, --offset=FILE  keep offset information in FILE.
+    -t, --test         test mode, do not update offset file.
+    --help, -h      show this help
+
+  If offset file is not specified, defaults to using the log file
+  with the .offset extension added.
+
+  Exit status is 0 if OK, non-zero otherwise.
+
+  Report bugs to <jesus@mindjolt.com>.
+    EOF
+    exit 0
+  end
+  opt
+end
+
+class Logtail
+  attr_accessor :file, :offset, :test
+
+  def run
+    pp self
+  end
+end
+
+opt = parse_cmd_line
+l = Logtail.new
+l.file = opt[:file]
+l.offset = opt[:offset]
+l.test = !opt[:test].nil?
+l.run
