@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 require 'getoptlong'
 require 'pp'
-require 'yaml'
 
 def parse_cmd_line
   opts = GetoptLong.new(
@@ -41,50 +40,78 @@ def parse_cmd_line
   opt
 end
 
-class Offset
-  attr_accessor :filename, :offset
+class MultiFileReader
+  attr_reader :current_filename, :offset, :line_count, :state_file
+  attr_accessor :test
 
-  def initialize filename, offset
-    @filename = filename
-    @offset = offset
+  def initialize filenames, state_file
+    @filenames = Dir[filenames].sort
+    @state_file = state_file
+    @line_count = 0
+    @current_filename = nil
+    @offset = 0
+    load
   end
 
-  def self.read file
-    YAML::load(File.read(file))
+  def each
+    raise "Can't reuse" unless @line_count == 0
+    first = true
+    filenames.each do |fn|
+      next if first and current_filename and current_filename != fn
+      self.current_filename = fn
+      File.open(fn, 'rb') do |f|
+        f.seek(offset) if first
+        first = false
+        f.each_line do |line|
+          self.offset = f.tell
+          begin
+            yield line
+            @line_count += 1
+          rescue EOFError
+            next
+          end
+        end
+      end
+    end
+    persist!
   end
 
   def to_s
-    "Offset(#{filename}:#{offset})"
-  end
-end
-
-class Logtail
-  attr_accessor :file, :state_file, :test
-
-  def run
-    puts "Starting at offset #{offset}"
-    filenames.dup.drop_while {|fn| fn != offset.filename }.each do |fn|
-      puts "Processing file #{fn}"
-    end
+    "MultiFileReader(#{current_filename}:#{offset})"
   end
 
 private
-  def filenames
-    @filenames ||= Dir[file].sort
+  attr_reader :filenames
+
+  def current_filename= fn
+    return if @current_filename == fn
+    @current_filename = fn
+    persist!
   end
 
-  def offset
-    @offset ||= begin
-      Offset.read(state_file)
-    rescue
-      Offset.new(filenames.first, 0)
+  def offset= offset
+    @offset = offset
+    persist
+  end
+
+  def persist
+    persist! if line_count % 1000 == 0
+  end
+
+  def persist!
+    return if test
+    File.open(state_file, 'wb') do |f|
+      f.write([ offset, current_filename ].pack('Qa*'))
     end
+  end
+
+  def load
+    @offset, @current_filename = File.read(state_file).unpack('Qa*')
+  rescue
   end
 end
 
 opt = parse_cmd_line
-l = Logtail.new
-l.file = opt[:file]
-l.state_file = opt[:offset]
-l.test = !opt[:test].nil?
-l.run
+reader = MultiFileReader.new(opt[:file], opt[:offset])
+reader.test = !opt[:test].nil?
+reader.each {|line| puts line }
