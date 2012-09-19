@@ -7,7 +7,7 @@ def parse_cmd_line
     [ '--help', '-h', GetoptLong::NO_ARGUMENT ],
     [ '--file', '-f', GetoptLong::REQUIRED_ARGUMENT ],
     [ '--offset', '-o', GetoptLong::REQUIRED_ARGUMENT ],
-    [ '--test', '-t', GetoptLong::NO_ARGUMENT ],
+    [ '--test', '-t', GetoptLong::NO_ARGUMENT ]
   )
 
   opt = {}
@@ -86,6 +86,7 @@ private
   def current_filename= fn
     return if @current_filename == fn
     @current_filename = fn
+    @offset = 0
     persist!
   end
 
